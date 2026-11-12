@@ -1,12 +1,14 @@
 # Monitor dell'avviso del giorno su copego.cloud con notifica push via ntfy.
+#
+# Funziona a catena: ogni turno dura circa 5 ore e 50 minuti e controlla ogni 5 minuti.
+# Appena parte, prenota il turno successivo (workflow_dispatch), che resta in coda e
+# scatta nell'istante in cui questo finisce. Cosi' il controllo e' continuo, 24 ore su 24,
+# senza dipendere dalla pianificazione di GitHub, che su questo repository non parte.
+# Gli orari "schedule" qui sotto restano solo come rete di sicurezza.
 name: Controllo avviso Copego
 
 on:
   schedule:
-    # Tre turni al giorno (orari UTC: in Italia +1 in inverno, +2 in estate).
-    # Ogni turno resta acceso e controlla ogni 5 minuti per circa 5 ore e 50 minuti,
-    # e comunque si ferma alle 20:00 UTC (21:00 inverno, 22:00 estate).
-    # Un avvio in ritardo da parte di GitHub sposta solo l'inizio: il turno dura lo stesso.
     - cron: "3 5 * * *"
     - cron: "50 10 * * *"
     - cron: "40 16 * * *"
@@ -14,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: controllo-copego
@@ -25,6 +28,11 @@ jobs:
     timeout-minutes: 356
     steps:
       - uses: actions/checkout@v4
+
+      - name: Prenota il turno successivo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run check.yml --ref main --repo "$GITHUB_REPOSITORY"
 
       - uses: actions/setup-python@v5
         with:
@@ -40,10 +48,7 @@ jobs:
         run: |
           git config user.name "copego-monitor"
           git config user.email "copego-monitor@users.noreply.github.com"
-          inizio=$(date -u +%s)
-          fine_giornata=$(date -u -d "today 20:00" +%s)
-          fine_turno=$((inizio + 350 * 60))
-          fine=$(( fine_giornata < fine_turno ? fine_giornata : fine_turno ))
+          fine=$(( $(date -u +%s) + 350 * 60 ))
           echo "Turno fino alle $(date -u -d @$fine +%H:%M) UTC"
           while true; do
             python check_copego.py || echo "Controllo fallito, riprovo al prossimo giro"
