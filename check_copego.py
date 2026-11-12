@@ -100,12 +100,8 @@ def ntfy_image(topic: str, title: str, image_bytes: bytes, filename: str = "avvi
     r.raise_for_status()
 
 
-def notify(topic: str, notice: dict | None, first_run: bool) -> None:
+def notify(topic: str, notice: dict, first_run: bool) -> None:
     # I titoli negli header HTTP devono restare in ASCII: niente accenti qui.
-    if notice is None:
-        ntfy_text(topic, "Copego: nessun avviso", "Oggi non risulta nessun avviso pubblicato.")
-        return
-
     date = notice.get("notificationDate") or ""
     title = f"Copego: avviso aggiornato {date}".strip()
     if first_run:
@@ -147,7 +143,6 @@ def main() -> int:
 
     first_run = previous is None
     print(f"[{now}] {'Primo avvio' if first_run else 'CAMBIAMENTO rilevato'}: {previous} -> {fp[:12]}")
-    notify(topic, notice, first_run)
 
     state.update(
         {
@@ -159,6 +154,14 @@ def main() -> int:
         }
     )
     save_state(state)
+
+    if notice is None:
+        # Sito vuoto (avviso tolto): nessuna notifica, solo memoria dello stato,
+        # cosi' il prossimo avviso vero viene riconosciuto come novita'.
+        print("Nessun avviso pubblicato: nessuna notifica.")
+        return 0
+
+    notify(topic, notice, first_run)
     print("Notifica inviata.")
     return 0
 
