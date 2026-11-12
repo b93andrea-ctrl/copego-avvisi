@@ -3,9 +3,13 @@ name: Controllo avviso Copego
 
 on:
   schedule:
-    # Ogni 5 minuti dalle 5:00 alle 19:55 UTC (6:00-20:55 ora italiana invernale,
-    # 7:00-21:55 estiva). Richiede un repository pubblico (minuti Actions illimitati).
-    - cron: "*/5 5-19 * * *"
+    # Tre turni al giorno (orari UTC: in Italia +1 in inverno, +2 in estate).
+    # Ogni turno resta acceso e controlla ogni 5 minuti per circa 5 ore e 50 minuti,
+    # e comunque si ferma alle 20:00 UTC (21:00 inverno, 22:00 estate).
+    # Un avvio in ritardo da parte di GitHub sposta solo l'inizio: il turno dura lo stesso.
+    - cron: "3 5 * * *"
+    - cron: "50 10 * * *"
+    - cron: "40 16 * * *"
   workflow_dispatch:
 
 permissions:
@@ -18,7 +22,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 356
     steps:
       - uses: actions/checkout@v4
 
@@ -28,22 +32,27 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Controlla e notifica
+      - name: Controlla ogni 5 minuti
         env:
           COPEGO_EMAIL: ${{ secrets.COPEGO_EMAIL }}
           COPEGO_PASSWORD: ${{ secrets.COPEGO_PASSWORD }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        run: python check_copego.py
-
-      - name: Salva lo stato
         run: |
           git config user.name "copego-monitor"
           git config user.email "copego-monitor@users.noreply.github.com"
-          git add state.json
-          if git diff --cached --quiet; then
-            echo "Stato invariato"
-          else
-            git commit -m "Aggiorna stato controllo"
-            git pull --rebase
-            git push
-          fi
+          inizio=$(date -u +%s)
+          fine_giornata=$(date -u -d "today 20:00" +%s)
+          fine_turno=$((inizio + 350 * 60))
+          fine=$(( fine_giornata < fine_turno ? fine_giornata : fine_turno ))
+          echo "Turno fino alle $(date -u -d @$fine +%H:%M) UTC"
+          while true; do
+            python check_copego.py || echo "Controllo fallito, riprovo al prossimo giro"
+            git add state.json
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Aggiorna stato controllo"
+              { git pull -q --rebase && git push -q; } || echo "Salvataggio stato fallito"
+            fi
+            [ "$(date -u +%s)" -lt "$fine" ] || break
+            sleep 300
+          done
+          echo "Turno terminato"
