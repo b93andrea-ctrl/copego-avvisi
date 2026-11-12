@@ -4,6 +4,8 @@
 # Appena parte, prenota il turno successivo (workflow_dispatch), che resta in coda e
 # scatta nell'istante in cui questo finisce. Cosi' il controllo e' continuo, 24 ore su 24,
 # senza dipendere dalla pianificazione di GitHub, che su questo repository non parte.
+# All'inizio e alla fine di ogni turno si verifica che il successivo sia davvero in coda;
+# se non lo e' e non si riesce a prenotarlo, arriva una notifica "monitor fermo".
 # Gli orari "schedule" qui sotto restano solo come rete di sicurezza.
 name: Controllo avviso Copego
 
@@ -22,6 +24,10 @@ concurrency:
   group: controllo-copego
   cancel-in-progress: false
 
+env:
+  GH_TOKEN: ${{ github.token }}
+  NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -30,9 +36,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Prenota il turno successivo
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run check.yml --ref main --repo "$GITHUB_REPOSITORY"
+        run: bash .github/turno_successivo.sh
 
       - uses: actions/setup-python@v5
         with:
@@ -44,7 +48,6 @@ jobs:
         env:
           COPEGO_EMAIL: ${{ secrets.COPEGO_EMAIL }}
           COPEGO_PASSWORD: ${{ secrets.COPEGO_PASSWORD }}
-          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
           git config user.name "copego-monitor"
           git config user.email "copego-monitor@users.noreply.github.com"
@@ -61,3 +64,7 @@ jobs:
             sleep 300
           done
           echo "Turno terminato"
+
+      - name: Verifica che il turno successivo sia in coda
+        if: always()
+        run: bash .github/turno_successivo.sh
