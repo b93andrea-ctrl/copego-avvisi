@@ -1,3 +1,4 @@
+# Monitor dell'avviso del giorno su copego.cloud con notifica push via ntfy.
 name: Controllo avviso Copego
 
 on:
