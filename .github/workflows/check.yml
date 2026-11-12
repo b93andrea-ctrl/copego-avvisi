@@ -1,0 +1,48 @@
+name: Controllo avviso Copego
+
+on:
+  schedule:
+    # Ogni 5 minuti dalle 5:00 alle 19:55 UTC (6:00-20:55 ora italiana invernale,
+    # 7:00-21:55 estiva). Richiede un repository pubblico (minuti Actions illimitati).
+    - cron: "*/5 5-19 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: controllo-copego
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Controlla e notifica
+        env:
+          COPEGO_EMAIL: ${{ secrets.COPEGO_EMAIL }}
+          COPEGO_PASSWORD: ${{ secrets.COPEGO_PASSWORD }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python check_copego.py
+
+      - name: Salva lo stato
+        run: |
+          git config user.name "copego-monitor"
+          git config user.email "copego-monitor@users.noreply.github.com"
+          git add state.json
+          if git diff --cached --quiet; then
+            echo "Stato invariato"
+          else
+            git commit -m "Aggiorna stato controllo"
+            git pull --rebase
+            git push
+          fi
