@@ -143,8 +143,6 @@ def main() -> int:
 
     if previous == fp:
         print(f"[{now}] Nessun cambiamento (impronta {fp[:12]}).")
-        state["last_checked"] = now
-        save_state(state)
         return 0
 
     first_run = previous is None
@@ -158,7 +156,6 @@ def main() -> int:
             "notification_date": notice.get("notificationDate") if notice else None,
             "last_modified": notice.get("lastModifiedDate") if notice else None,
             "last_changed": now,
-            "last_checked": now,
         }
     )
     save_state(state)
