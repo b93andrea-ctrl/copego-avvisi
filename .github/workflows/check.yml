@@ -51,15 +51,31 @@ jobs:
         run: |
           git config user.name "copego-monitor"
           git config user.email "copego-monitor@users.noreply.github.com"
+
+          # Un turno prenotato ore prima parte con una copia vecchia del repository:
+          # prima di tutto ci si allinea all'ultima versione (stato compreso), altrimenti
+          # un avviso gia' notificato dal turno precedente verrebbe notificato di nuovo.
+          git fetch -q origin main
+          git reset -q --hard origin/main
+          echo "Allineato a origin/main: $(git rev-parse --short HEAD)"
+
+          salva_stato() {
+            git add state.json
+            git diff --cached --quiet && return 0
+            cp state.json /tmp/state.json
+            git fetch -q origin main
+            git reset -q --hard origin/main
+            cp /tmp/state.json state.json
+            git add state.json
+            git commit -q -m "Aggiorna stato controllo"
+            git push -q origin HEAD:main && echo "Stato salvato." || echo "Salvataggio stato fallito"
+          }
+
           fine=$(( $(date -u +%s) + 350 * 60 ))
           echo "Turno fino alle $(date -u -d @$fine +%H:%M) UTC"
           while true; do
             python check_copego.py || echo "Controllo fallito, riprovo al prossimo giro"
-            git add state.json
-            if ! git diff --cached --quiet; then
-              git commit -q -m "Aggiorna stato controllo"
-              { git pull -q --rebase && git push -q; } || echo "Salvataggio stato fallito"
-            fi
+            salva_stato
             [ "$(date -u +%s)" -lt "$fine" ] || break
             sleep 300
           done
