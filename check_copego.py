@@ -26,6 +26,7 @@ NTFY_SERVER = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
 STATE_FILE = Path(os.environ.get("STATE_FILE", "state.json"))
 TIMEOUT = 30
 LOGIN_FAILURES_BEFORE_ALERT = 3
+FINGERPRINT_VERSION = 2  # da alzare ogni volta che cambia la formula dell'impronta
 
 GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
 MESI = [
@@ -73,10 +74,12 @@ def fetch_today(token: str) -> dict | None:
 
 
 def fingerprint(notice: dict | None) -> str:
+    """Impronta del solo contenuto (data, testo, immagine): un avviso risalvato
+    senza modifiche non viene notificato di nuovo."""
     if notice is None:
         return "nessun-avviso"
     h = hashlib.sha256()
-    for key in ("id", "notificationDate", "lastModifiedDate", "notificationText", "notificationImage"):
+    for key in ("notificationDate", "notificationText", "notificationImage"):
         h.update(str(notice.get(key)).encode("utf-8"))
         h.update(b"\0")
     return h.hexdigest()
@@ -228,6 +231,15 @@ def main() -> int:
     previous = state.get("fingerprint")
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
+    if previous is not None and state.get("fingerprint_version") != FINGERPRINT_VERSION:
+        # Cambiata la formula dell'impronta: si ricalcola in silenzio, senza
+        # notificare un avviso che e' gia' stato visto.
+        state["fingerprint"] = fp
+        state["fingerprint_version"] = FINGERPRINT_VERSION
+        save_state(state)
+        print(f"[{now}] Impronta ricalcolata con la formula {FINGERPRINT_VERSION}, nessuna notifica.")
+        return 0
+
     if previous == fp:
         print(f"[{now}] Nessun cambiamento (impronta {fp[:12]}).")
         return 0
@@ -235,9 +247,21 @@ def main() -> int:
     first_run = previous is None
     print(f"[{now}] {'Primo avvio' if first_run else 'CAMBIAMENTO rilevato'}: {previous} -> {fp[:12]}")
 
+    # Prima si avvisa, poi si salva la memoria: se ntfy non risponde, l'eccezione
+    # interrompe qui e il prossimo controllo riprova. Un eventuale doppione e'
+    # preferibile a un avviso perso per sempre.
+    if notice is None:
+        # Sito vuoto (avviso tolto): nessuna notifica, solo memoria dello stato,
+        # cosi' il prossimo avviso vero viene riconosciuto come novita'.
+        print("Nessun avviso pubblicato: nessuna notifica.")
+    else:
+        notify(topic, notice, first_run)
+        print("Notifica inviata.")
+
     state.update(
         {
             "fingerprint": fp,
+            "fingerprint_version": FINGERPRINT_VERSION,
             "notification_id": notice.get("id") if notice else None,
             "notification_date": notice.get("notificationDate") if notice else None,
             "last_modified": notice.get("lastModifiedDate") if notice else None,
@@ -245,15 +269,6 @@ def main() -> int:
         }
     )
     save_state(state)
-
-    if notice is None:
-        # Sito vuoto (avviso tolto): nessuna notifica, solo memoria dello stato,
-        # cosi' il prossimo avviso vero viene riconosciuto come novita'.
-        print("Nessun avviso pubblicato: nessuna notifica.")
-        return 0
-
-    notify(topic, notice, first_run)
-    print("Notifica inviata.")
     return 0
 
 
