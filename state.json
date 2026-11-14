@@ -1,8 +1,9 @@
 {
-  "fingerprint": "801eeea3e72fa93357d82cf991b237187cff19e9f84812092ecfc95e82f1d4d6",
+  "fingerprint": "c42d5fe11ba5108bc262690bc8b1fff410fa305449673401dd2f1942781f9754",
   "notification_id": 2711,
   "notification_date": "2026-11-14",
   "last_modified": "2026-11-13T17:45:08Z",
   "last_changed": "2026-11-13T22:23:25+00:00",
-  "last_checked": "2026-11-12T08:02:23+00:00"
+  "last_checked": "2026-11-12T08:02:23+00:00",
+  "fingerprint_version": 2
 }
