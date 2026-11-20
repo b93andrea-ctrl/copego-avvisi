@@ -1,9 +1,9 @@
 {
-  "fingerprint": "nessun-avviso",
-  "notification_id": null,
-  "notification_date": null,
-  "last_modified": null,
-  "last_changed": "2026-11-20T15:04:14+00:00",
+  "fingerprint": "b67cfbaacdac1c2235bf11dbbd5090f461f059acb2cd6f353a49b9900877537d",
+  "notification_id": 2719,
+  "notification_date": "2026-11-21",
+  "last_modified": "2026-11-20T17:56:27Z",
+  "last_changed": "2026-11-20T18:00:06+00:00",
   "last_checked": "2026-11-12T08:02:23+00:00",
   "fingerprint_version": 2
 }
